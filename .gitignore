@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+settings.json
+.DS_Store
+build/
+dist/
+releases/.staging/
+releases/*.zip
+releases/*/
+Digicosoftware/
+portable-staging/
+*.pdf
+Screenshot*
+.portable_ready
+DigiBridge.exe
+Digico-x-Soundscape.exe

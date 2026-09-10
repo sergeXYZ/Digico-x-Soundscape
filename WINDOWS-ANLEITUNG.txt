@@ -1,0 +1,20 @@
+Digico×Soundscape — Windows (portable)
+======================================
+
+Kein Python-Install noetig — alles ist im Ordner enthalten.
+
+Schnellstart
+------------
+1. Ordner entpacken
+2. Doppelklick: start_bridge.bat
+   (beim ersten Start: automatisches Setup, ca. 1 Minute)
+3. Browser oeffnet http://127.0.0.1:8765/
+4. "Start" klicken
+
+Optional: EXE bauen
+-------------------
+1. Doppelklick: build_exe.bat
+2. Ergebnis: dist\Digico-x-Soundscape.exe
+
+DiGiCo Pad → Bridge IP dieses PCs.
+DS100 Ports fest: 50010 / 50011.
