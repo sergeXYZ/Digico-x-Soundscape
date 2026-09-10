@@ -11,6 +11,7 @@ releases/*/
 Digicosoftware/
 portable-staging/
 *.pdf
+!docs/MANUAL.pdf
 Screenshot*
 .portable_ready
 DigiBridge.exe

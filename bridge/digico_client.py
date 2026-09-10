@@ -13,9 +13,13 @@ from bridge.constants import DIGICO_HANDSHAKE_PATH
 from bridge.net_utils import get_local_ip
 from bridge.sync_engine import (
     digico_aux_level_path,
+    digico_aux_master_fader_path,
+    digico_aux_master_mute_path,
     digico_aux_on_path,
     osc_truthy,
     parse_digico_aux_level,
+    parse_digico_aux_master_fader,
+    parse_digico_aux_master_mute,
     parse_digico_aux_on,
 )
 
@@ -30,6 +34,8 @@ class DigicoClient:
         listen_port: int,
         on_aux_level: Callable[[int, int, float], None],  # channel, aux, value
         on_aux_on: Callable[[int, int, bool], None] | None = None,
+        on_aux_master_fader: Callable[[int, float], None] | None = None,
+        on_aux_master_mute: Callable[[int, bool], None] | None = None,
         on_activity: Callable[[str], None] | None = None,
         log: Callable[[str], None] | None = None,
     ) -> None:
@@ -38,6 +44,8 @@ class DigicoClient:
         self.listen_port = listen_port
         self._on_aux_level = on_aux_level
         self._on_aux_on = on_aux_on or (lambda _ch, _aux, _on: None)
+        self._on_aux_master_fader = on_aux_master_fader or (lambda _aux, _v: None)
+        self._on_aux_master_mute = on_aux_master_mute or (lambda _aux, _m: None)
         self._on_activity = on_activity or (lambda _key: None)
         self._log = log or (lambda _msg: None)
         self._unknown_addresses: set[str] = set()
@@ -93,6 +101,11 @@ class DigicoClient:
             f"aux {sorted(set(aux_numbers))}"
         )
 
+    def request_aux_master(self, aux_number: int) -> None:
+        self._send_message(f"{digico_aux_master_fader_path(aux_number)}/?")
+        self._send_message(f"{digico_aux_master_mute_path(aux_number)}/?")
+        self._log(f"DiGiCo Aux Master query aux {aux_number}")
+
     def stop(self) -> None:
         if self._server:
             self._server.shutdown()
@@ -119,6 +132,29 @@ class DigicoClient:
         self._on_activity("digico_tx")
 
     def _handle_message(self, address: str, *args: object) -> None:
+        master_mute = parse_digico_aux_master_mute(address)
+        if master_mute is not None:
+            if not args:
+                return
+            muted = osc_truthy(args[0])
+            if muted is None:
+                return
+            self._on_activity("digico_rx")
+            self._on_aux_master_mute(master_mute, muted)
+            return
+
+        master_fader = parse_digico_aux_master_fader(address)
+        if master_fader is not None:
+            if not args:
+                return
+            value = args[0]
+            if isinstance(value, bool):
+                return
+            if isinstance(value, (int, float)):
+                self._on_activity("digico_rx")
+                self._on_aux_master_fader(master_fader, float(value))
+            return
+
         on_parsed = parse_digico_aux_on(address)
         if on_parsed is not None:
             if not args:

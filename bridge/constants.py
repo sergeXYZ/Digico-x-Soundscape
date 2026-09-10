@@ -10,6 +10,9 @@ DS100_SEND_PORT = 50010
 DS100_LISTEN_PORT = 50011
 DS100_PREFIX = "/dbaudio1"
 
+# En-Space zones (reverbinputprocessing gain/mute 1–4)
+ENSPACE_ZONE_COUNT = 4
+
 # Companion-style continuous poll for mapped reverbsendgain channels (ms).
 DS100_POLL_INTERVAL_MS = 500
 DS100_POLL_INTERVAL_MIN_MS = 100

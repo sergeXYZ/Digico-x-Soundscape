@@ -14,6 +14,7 @@ from bridge.constants import (
     DS100_POLL_INTERVAL_MS,
 )
 from bridge.mapping import (
+    DIGICO_AUX_MAX,
     MappingSpec,
     default_mappings,
     mapping_from_dict,
@@ -44,6 +45,9 @@ class BridgeSettings:
     ds100_host: str = "192.168.1.20"
     ds100_poll_interval_ms: int = DS100_POLL_INTERVAL_MS
     mappings: list[MappingSpec] = field(default_factory=default_mappings)
+    # Digico Aux Master → En-Space zone 1–4 gain/mute
+    enspace_master_link_enabled: bool = False
+    enspace_master_aux: int = 1
 
 
 def load_settings() -> BridgeSettings:
@@ -58,6 +62,10 @@ def load_settings() -> BridgeSettings:
         else:
             mappings = default_mappings()
 
+        master_aux = int(data.get("enspace_master_aux", 1))
+        if not 1 <= master_aux <= DIGICO_AUX_MAX:
+            master_aux = 1
+
         return BridgeSettings(
             start_channel=int(data.get("start_channel", 1)),
             end_channel=int(data.get("end_channel", 64)),
@@ -69,6 +77,10 @@ def load_settings() -> BridgeSettings:
                 int(data.get("ds100_poll_interval_ms", DS100_POLL_INTERVAL_MS))
             ),
             mappings=mappings,
+            enspace_master_link_enabled=bool(
+                data.get("enspace_master_link_enabled", False)
+            ),
+            enspace_master_aux=master_aux,
         )
     except (json.JSONDecodeError, TypeError, ValueError, KeyError):
         return BridgeSettings()

@@ -26,7 +26,7 @@ from bridge.settings import BridgeSettings, clamp_poll_interval_ms, load_setting
 APP_NAME = "Digico×Soundscape"
 
 HTML = """<!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -115,12 +115,13 @@ input[type=text], input[type=number], select {
   background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px;
 }
 input:disabled, select:disabled { opacity: 0.55; }
-input.no-spin::-webkit-outer-spin-button,
-input.no-spin::-webkit-inner-spin-button {
+/* Hide spinner arrows on all number fields */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-input.no-spin {
+input[type=number] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
@@ -129,8 +130,11 @@ input.no-spin {
 }
 .port-line .lbl { flex: 1; color: var(--muted); }
 .port-line .port, .port-line input { width: 90px; margin: 0; font-family: var(--mono); }
-.channels { display: flex; gap: 14px; flex-wrap: wrap; }
-.ch-field { width: 140px; }
+.channels-inline {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.channels-inline .ch-field { width: 120px; flex: 1; min-width: 100px; }
+.channels-inline .ch-field input { margin-bottom: 0; }
 .mapping-row {
   display: grid;
   grid-template-columns: auto 1fr 1fr auto;
@@ -156,6 +160,25 @@ input.no-spin {
   height: 260px; overflow: auto; padding: 10px; white-space: pre-wrap;
 }
 .sub { color: var(--accent); font-size: 13px; }
+.switch-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.switch {
+  position: relative; width: 42px; height: 24px; flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0; cursor: pointer;
+  background: #3a4050; border-radius: 24px; border: 1px solid var(--border);
+  transition: 0.15s;
+}
+.slider:before {
+  content: ""; position: absolute; width: 18px; height: 18px;
+  left: 2px; top: 2px; background: #c8cdd8; border-radius: 50%; transition: 0.15s;
+}
+.switch input:checked + .slider { background: var(--accent-dim); border-color: var(--accent); }
+.switch input:checked + .slider:before { transform: translateX(18px); background: #fff; }
+.switch-label { font-weight: 500; }
+.master-aux-field { width: 140px; margin: 0; }
+.master-aux-field select { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -176,23 +199,22 @@ input.no-spin {
 </header>
 
 <main class="layout">
-  <div class="channels">
-    <div class="ch-field"><label>Start Kanal</label><input type="number" id="start_channel" min="1"></div>
-    <div class="ch-field"><label>End Kanal</label><input type="number" id="end_channel" min="1"></div>
-  </div>
-
   <div class="row">
     <div class="panel">
       <h2><span class="conn-dot" id="conn_digico"></span> DiGiCo Console</h2>
+      <div class="channels-inline">
+        <div class="ch-field"><label>Start Channel</label><input type="number" id="start_channel" min="1"></div>
+        <div class="ch-field"><label>End Channel</label><input type="number" id="end_channel" min="1"></div>
+      </div>
       <label>IP Address</label>
       <input type="text" id="digico_host">
       <div class="port-line">
         <span class="lbl">Receive (Console → Bridge)</span>
-        <input type="number" class="no-spin" id="digico_listen_port" min="1" max="65535">
+        <input type="number" id="digico_listen_port" min="1" max="65535">
       </div>
       <div class="port-line">
         <span class="lbl">Send (Bridge → Console)</span>
-        <input type="number" class="no-spin" id="digico_send_port" min="1" max="65535">
+        <input type="number" id="digico_send_port" min="1" max="65535">
       </div>
     </div>
     <div class="panel">
@@ -215,9 +237,26 @@ input.no-spin {
   </div>
 
   <div class="panel">
+    <h2><span class="led" id="led_map_enspace_master" style="margin-right:8px"></span> Aux Master → En-Space Zones</h2>
+    <p class="hint">When enabled: DiGiCo Aux Master fader controls En-Space Zone 1–4 gain
+      (<code>/reverbinputprocessing/gain</code>); Aux Master mute controls Zone 1–4 mute.</p>
+    <div class="switch-row">
+      <label class="switch" title="Enable">
+        <input type="checkbox" id="enspace_master_link_enabled">
+        <span class="slider"></span>
+      </label>
+      <span class="switch-label">Enable</span>
+      <div class="master-aux-field">
+        <label>Aux Master</label>
+        <select id="enspace_master_aux"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
     <h2>Mappings</h2>
-    <p class="hint">DiGiCo Aux → DS100 Parameter. En-Space Send: Aux Off speichert Level und setzt −120 dB.
-      Function Group Routing: Aux On = Mute Off (kein Zwischenspeicher).</p>
+    <p class="hint">DiGiCo Aux → DS100 parameter. En-Space Send: Aux Off stores level and forces −120 dB.
+      Function Group Routing: Aux On = Mute Off (no store).</p>
     <div class="mapping-toolbar">
       <button type="button" class="btn primary" id="addMappingBtn" onclick="addMapping()">+ Add Mapping</button>
     </div>
@@ -239,6 +278,19 @@ const DIGICO_AUX_MAX = __DIGICO_AUX_MAX__;
 const FG_MAX = __FG_MAX__;
 const DS100_CHOICES = __DS100_CHOICES__;
 const fieldIds = ['start_channel','end_channel','digico_host','digico_send_port','digico_listen_port','ds100_host','ds100_poll_interval_ms'];
+const masterFieldIds = ['enspace_master_link_enabled', 'enspace_master_aux'];
+
+function fillMasterAuxSelect(selected) {
+  const sel = document.getElementById('enspace_master_aux');
+  sel.innerHTML = '';
+  for (let a = 1; a <= DIGICO_AUX_MAX; a++) {
+    const o = document.createElement('option');
+    o.value = a; o.textContent = 'Aux ' + a;
+    if (Number(selected) === a) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+
 const ledKeys = ['digico_rx','digico_tx','ds100_rx','ds100_tx'];
 let mappings = [];
 let lastShownStartError = null;
@@ -321,7 +373,7 @@ function addMapping() {
   renderMappings();
 }
 function removeMapping(idx) {
-  if (mappings.length <= 1) { alert('Mindestens ein Mapping nötig'); return; }
+  if (mappings.length <= 1) { alert('At least one mapping is required'); return; }
   mappings.splice(idx, 1);
   renderMappings();
 }
@@ -347,6 +399,8 @@ function updateMappingLeds(last, now) {
     const age = last[key] != null ? (now - last[key]) : null;
     setLedState(document.getElementById('led_map_' + m.id), age);
   });
+  const mage = last['map:enspace_master'] != null ? (now - last['map:enspace_master']) : null;
+  setLedState(document.getElementById('led_map_enspace_master'), mage);
 }
 
 function updateActivity(d) {
@@ -380,6 +434,8 @@ async function poll() {
 
 function setFields(data) {
   fieldIds.forEach(id => { if (data[id] !== undefined) document.getElementById(id).value = data[id]; });
+  fillMasterAuxSelect(data.enspace_master_aux || 1);
+  document.getElementById('enspace_master_link_enabled').checked = !!data.enspace_master_link_enabled;
   document.getElementById('bridgeIp').textContent = 'Bridge IP: ' + (data.bridge_ip || '—');
   document.getElementById('ds100_listen_display').textContent = data.ds100_listen_port;
   document.getElementById('ds100_send_display').textContent = data.ds100_send_port;
@@ -395,6 +451,8 @@ function setRunning(d) {
   document.getElementById('testBtn').disabled = !running;
   document.getElementById('addMappingBtn').disabled = running || starting;
   fieldIds.forEach(id => document.getElementById(id).disabled = running || starting);
+  document.getElementById('enspace_master_link_enabled').disabled = running || starting;
+  document.getElementById('enspace_master_aux').disabled = running || starting;
   document.querySelectorAll('#mappings select, #mappings button').forEach(el => el.disabled = running || starting);
   const pill = document.getElementById('statusPill');
   if (starting) pill.textContent = 'Starting…';
@@ -410,6 +468,8 @@ function setRunning(d) {
 function getForm() {
   const o = {};
   fieldIds.forEach(id => o[id] = document.getElementById(id).value);
+  o.enspace_master_link_enabled = document.getElementById('enspace_master_link_enabled').checked;
+  o.enspace_master_aux = Number(document.getElementById('enspace_master_aux').value);
   o.mappings = mappings.map(m => ({
     id: m.id,
     digico_aux: Number(m.digico_aux),
@@ -434,11 +494,11 @@ async function testConn() {
   await fetch('/api/test', {method:'POST'});
 }
 async function quitServer() {
-  if (!confirm('Server beenden und Digico×Soundscape schließen?')) return;
+  if (!confirm('Quit Digico×Soundscape and shut down the server?')) return;
   try {
     await fetch('/api/quit', {method:'POST'});
   } catch (e) {}
-  document.body.innerHTML = '<div style="padding:40px;font-family:IBM Plex Sans,sans-serif;background:#12141a;color:#e8eaf0;min-height:100vh">Server beendet. Fenster kann geschlossen werden.</div>';
+  document.body.innerHTML = '<div style="padding:40px;font-family:IBM Plex Sans,sans-serif;background:#12141a;color:#e8eaf0;min-height:100vh">Server stopped. You can close this window.</div>';
 }
 
 fetch('/api/settings').then(r=>r.json()).then(setFields).then(poll);
@@ -503,6 +563,8 @@ class WebBridgeServer:
                     }
                     for m in s.mappings
                 ],
+                "enspace_master_link_enabled": s.enspace_master_link_enabled,
+                "enspace_master_aux": s.enspace_master_aux,
             }
         )
 
@@ -555,6 +617,9 @@ class WebBridgeServer:
         data = request.get_json(silent=True) or {}
         try:
             mappings = self._parse_mappings(data)
+            master_aux = int(data.get("enspace_master_aux", 1))
+            if not 1 <= master_aux <= DIGICO_AUX_MAX:
+                raise ValueError(f"Aux Master must be 1–{DIGICO_AUX_MAX}")
             settings = BridgeSettings(
                 start_channel=int(data["start_channel"]),
                 end_channel=int(data["end_channel"]),
@@ -566,6 +631,10 @@ class WebBridgeServer:
                     int(data.get("ds100_poll_interval_ms", 500))
                 ),
                 mappings=mappings,
+                enspace_master_link_enabled=bool(
+                    data.get("enspace_master_link_enabled", False)
+                ),
+                enspace_master_aux=master_aux,
             )
             ipaddress.ip_address(settings.digico_host)
             ipaddress.ip_address(settings.ds100_host)

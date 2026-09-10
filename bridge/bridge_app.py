@@ -81,6 +81,8 @@ class BridgeApp:
             listen_port=self.settings.digico_listen_port,
             on_aux_level=self._on_digico_level,
             on_aux_on=self._on_digico_aux_on,
+            on_aux_master_fader=self._on_digico_aux_master_fader,
+            on_aux_master_mute=self._on_digico_aux_master_mute,
             on_activity=self._on_activity,
             log=self._log,
         )
@@ -95,6 +97,10 @@ class BridgeApp:
             on_to_digico_on=self._send_digico_on,
             log=self._log,
             on_mapping_activity=self._on_mapping_activity,
+            enspace_master_link_enabled=self.settings.enspace_master_link_enabled,
+            enspace_master_aux=self.settings.enspace_master_aux,
+            on_enspace_zones_gain=self._send_enspace_zones_gain,
+            on_enspace_zones_mute=self._send_enspace_zones_mute,
         )
 
         require_udp_port(DS100_LISTEN_PORT, "DS100 Listen")
@@ -114,6 +120,11 @@ class BridgeApp:
         )
         for mapping in self.settings.mappings:
             self._log(f"  • {mapping.label()}")
+        if self.settings.enspace_master_link_enabled:
+            self._log(
+                f"  • Aux Master {self.settings.enspace_master_aux} "
+                "→ En-Space Zone 1–4 gain/mute"
+            )
 
         bridge_ip = get_local_ip(target_host=self.settings.digico_host)
         self._log(
@@ -138,6 +149,8 @@ class BridgeApp:
         self._digico.request_aux_levels(
             self.settings.start_channel, self.settings.end_channel, auxes
         )
+        if self.settings.enspace_master_link_enabled:
+            self._digico.request_aux_master(self.settings.enspace_master_aux)
 
         threading.Thread(
             target=self.test_connections, daemon=True, name="conn-test-start"
@@ -190,6 +203,14 @@ class BridgeApp:
         if self._engine:
             self._engine.handle_digico_aux_on(channel, aux, is_on)
 
+    def _on_digico_aux_master_fader(self, aux: int, value: float) -> None:
+        if self._engine:
+            self._engine.handle_digico_aux_master_fader(aux, value)
+
+    def _on_digico_aux_master_mute(self, aux: int, muted: bool) -> None:
+        if self._engine:
+            self._engine.handle_digico_aux_master_mute(aux, muted)
+
     def _on_ds100_enspace(self, channel: int, value: float) -> None:
         if self._engine:
             self._engine.handle_ds100_enspace_gain(channel, value)
@@ -221,6 +242,14 @@ class BridgeApp:
             and mapping.function_group is not None
         ):
             self._ds100.send_fg_mute(mapping.function_group, channel, muted)
+
+    def _send_enspace_zones_gain(self, value: float) -> None:
+        if self._ds100:
+            self._ds100.send_enspace_zones_gain(value)
+
+    def _send_enspace_zones_mute(self, muted: bool) -> None:
+        if self._ds100:
+            self._ds100.send_enspace_zones_mute(muted)
 
     def _send_digico_level(self, channel: int, aux: int, value: float) -> None:
         if self._digico:

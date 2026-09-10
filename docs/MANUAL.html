@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Digico×Soundscape User Manual</title>
+<style>
+@page { margin: 2cm; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.45; color: #111; }
+h1 { font-size: 20pt; border-bottom: 2px solid #3d9cf0; padding-bottom: 6px; }
+h2 { font-size: 14pt; margin-top: 1.4em; }
+h3 { font-size: 12pt; margin-top: 1.1em; }
+code { font-family: Menlo, monospace; font-size: 9.5pt; background: #f0f2f5; padding: 1px 4px; }
+pre { background: #f0f2f5; padding: 10px; font-size: 9pt; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 10pt; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+th { background: #e8eef5; }
+</style></head><body><h1>Digico×Soundscape — User Manual</h1>
+<p><strong>Version:</strong> 0.2.0-beta<br />
+<strong>Date:</strong> 10 September 2026<br />
+<strong>Product:</strong> Digico×Soundscape<br />
+<strong>Repository:</strong> https://github.com/sergeXYZ/Digico-x-Soundscape</p>
+<hr />
+<h2>1. Overview</h2>
+<p>Digico×Soundscape is a bidirectional OSC bridge between a <strong>DiGiCo Quantum</strong> mixing console (External Control → DiGiCo Pad) and a <strong>d&amp;b audiotechnik DS100 Soundscape</strong> processor.</p>
+<p>It maps DiGiCo Aux send levels to DS100 parameters such as:</p>
+<ul>
+<li><strong>En-Space Send</strong> (per sound object / matrix input)</li>
+<li><strong>Function Group Routing 1–32</strong> (gain + mute)</li>
+</ul>
+<p>Optionally, the DiGiCo <strong>Aux Master</strong> fader and mute can control all four <strong>En-Space zone</strong> gains and mutes.</p>
+<p>All continuous levels are clamped to <strong>-120.0 dB … +10.0 dB</strong>.</p>
+<hr />
+<h2>2. System architecture</h2>
+<pre><code>┌─────────────────┐     OSC      ┌──────────────────┐     OSC      ┌─────────┐
+│ DiGiCo Console  │ ◄──────────► │  Bridge computer │ ◄──────────► │  DS100  │
+│ (desk / offline)│  Pad ports   │ Digico×Soundscape│ 50010/50011  │         │
+└─────────────────┘              └──────────────────┘              └─────────┘
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>DiGiCo IP</strong></td>
+<td>IP of the console (or offline PC), <strong>not</strong> the bridge</td>
+</tr>
+<tr>
+<td><strong>Bridge IP</strong></td>
+<td>IP of the computer running Digico×Soundscape (shown in the UI)</td>
+</tr>
+<tr>
+<td><strong>DS100 IP</strong></td>
+<td>IP of the Soundscape processor</td>
+</tr>
+</tbody>
+</table>
+<p>All three devices must share the same show network.</p>
+<hr />
+<h2>3. Installation</h2>
+<h3>3.1 Download packages</h3>
+<p>From <a href="https://github.com/sergeXYZ/Digico-x-Soundscape/releases">GitHub Releases</a>:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Platform</th>
+<th>How to start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Digico-x-Soundscape-macos-arm64-*.zip</code></td>
+<td>macOS Apple Silicon</td>
+<td>Run <code>./Digico-x-Soundscape</code></td>
+</tr>
+<tr>
+<td><code>Digico-x-Soundscape-windows-portable-*.zip</code></td>
+<td>Windows</td>
+<td>Double-click <code>start_bridge.bat</code></td>
+</tr>
+<tr>
+<td><code>Digico-x-Soundscape-linux-*.zip</code></td>
+<td>Linux x86_64</td>
+<td><code>./install.sh</code> then <code>./Digico-x-Soundscape.sh</code></td>
+</tr>
+<tr>
+<td><code>Digico-x-Soundscape-raspberrypi-*.zip</code></td>
+<td>Raspberry Pi 64-bit</td>
+<td><code>./install.sh</code> then <code>./Digico-x-Soundscape.sh</code></td>
+</tr>
+</tbody>
+</table>
+<p>Web UI: <strong>http://127.0.0.1:8765/</strong></p>
+<h3>3.2 macOS notes</h3>
+<ul>
+<li>Unsigned binary: if Gatekeeper blocks it, right-click → <strong>Open</strong>.</li>
+<li>Allow incoming UDP in the firewall for the DiGiCo listen port and DS100 port <strong>50011</strong>.</li>
+</ul>
+<h3>3.3 Windows notes</h3>
+<ul>
+<li>Portable package includes Python; first start runs a one-time setup.</li>
+<li>Allow inbound UDP on the DiGiCo receive port and <strong>50011</strong> in Windows Firewall.</li>
+</ul>
+<h3>3.4 Linux / Raspberry Pi</h3>
+<pre><code class="language-bash">sudo apt install python3 python3-venv python3-pip
+chmod +x install.sh Digico-x-Soundscape.sh
+./install.sh
+./Digico-x-Soundscape.sh
+</code></pre>
+<h3>3.5 Run from source (developers)</h3>
+<pre><code class="language-bash">cd Digico-x-Soundscape
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m bridge.main
+</code></pre>
+<hr />
+<h2>4. DiGiCo console setup</h2>
+<ol>
+<li>Open <strong>Setup → External Control</strong>.</li>
+<li>Enable External Control.</li>
+<li><strong>Add Device → DiGiCo Pad</strong>.</li>
+<li>Set the device IP to the <strong>Bridge IP</strong> shown in Digico×Soundscape.</li>
+<li>Match <strong>Send</strong> / <strong>Receive</strong> ports with the GUI:</li>
+<li>Console <strong>Send</strong> = Bridge <strong>Receive (Console → Bridge)</strong></li>
+<li>Console <strong>Receive</strong> = Bridge <strong>Send (Bridge → Console)</strong></li>
+<li>Enable the device and load Pad commands.</li>
+</ol>
+<p>Example (common defaults):</p>
+<table>
+<thead>
+<tr>
+<th>Side</th>
+<th>Port</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bridge listen (Receive)</td>
+<td>8000</td>
+</tr>
+<tr>
+<td>Bridge send</td>
+<td>9000</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. DS100 setup</h2>
+<ul>
+<li>DS100 OSC ports are <strong>fixed</strong>:</li>
+<li>Bridge → DS100: <strong>50010</strong></li>
+<li>DS100 → Bridge: <strong>50011</strong></li>
+<li>Ensure Companion or other apps do not occupy <strong>50011</strong> on the bridge computer unless you intend to share carefully.</li>
+<li>Enter the DS100 IP in the GUI.</li>
+</ul>
+<hr />
+<h2>6. Using the web UI</h2>
+<ol>
+<li>Start Digico×Soundscape — the browser opens http://127.0.0.1:8765/</li>
+<li>Configure <strong>Start Channel</strong> / <strong>End Channel</strong> (inside the DiGiCo Console panel).</li>
+<li>Set DiGiCo and DS100 IPs and Digico ports.</li>
+<li>Add <strong>Mappings</strong> (Aux → DS100 parameter).</li>
+<li>Optionally enable <strong>Aux Master → En-Space Zones</strong>.</li>
+<li>Click <strong>Start</strong>.</li>
+<li>Use <strong>Test</strong> to probe connections; <strong>Stop</strong> to stop the OSC bridge; <strong>Quit</strong> to exit the server.</li>
+</ol>
+<p>Status LEDs:</p>
+<ul>
+<li>Header: DiGiCo / DS100 RX &amp; TX activity</li>
+<li>Per mapping: Act LED when that mapping syncs</li>
+<li>Aux Master panel: LED when master→zone link is active</li>
+</ul>
+<p>The <strong>Log</strong> section is collapsed by default; click <strong>Log</strong> to expand.</p>
+<hr />
+<h2>7. Mappings</h2>
+<p>Each mapping links one DiGiCo Aux to one DS100 parameter for every channel in Start–End.</p>
+<h3>7.1 En-Space Send</h3>
+<table>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Digico Aux send level ↔ DS100</td>
+<td><code>/dbaudio1/matrixinput/reverbsendgain/{N}</code></td>
+</tr>
+<tr>
+<td>Digico Aux Off</td>
+<td>Store last level; force DS100 to <strong>-120 dB</strong></td>
+</tr>
+<tr>
+<td>Digico Aux On</td>
+<td>Restore stored level</td>
+</tr>
+</tbody>
+</table>
+<h3>7.2 Function Group Routing 1–32</h3>
+<table>
+<thead>
+<tr>
+<th>Direction</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Level</td>
+<td><code>/dbaudio1/soundobjectrouting/gain/{FG}/{N}</code></td>
+</tr>
+<tr>
+<td>Digico Aux On / Off</td>
+<td>Maps to mute off / mute on (<code>…/mute/{FG}/{N}</code>) — <strong>no store</strong></td>
+</tr>
+<tr>
+<td>Aux On = Mute Off</td>
+<td>As designed for DS100 FG mute</td>
+</tr>
+</tbody>
+</table>
+<p>Click <strong>+ Add Mapping</strong> for additional Aux → parameter pairs. At least one mapping is required.</p>
+<hr />
+<h2>8. Aux Master → En-Space Zones</h2>
+<p>Enable switch in the UI. When enabled for a chosen Aux Master:</p>
+<table>
+<thead>
+<tr>
+<th>Digico</th>
+<th>DS100 (zones 1–4)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/Aux_Outputs/{AUX}/fader</code></td>
+<td><code>/dbaudio1/reverbinputprocessing/gain/1</code> … <code>/4</code></td>
+</tr>
+<tr>
+<td><code>/Aux_Outputs/{AUX}/mute</code></td>
+<td><code>/dbaudio1/reverbinputprocessing/mute/1</code> … <code>/4</code></td>
+</tr>
+</tbody>
+</table>
+<p>Use this to ride overall En-Space zone level and mute from the Digico Aux master.</p>
+<hr />
+<h2>9. Polling</h2>
+<ul>
+<li><strong>Polling Interval (ms):</strong> 100–60000 (default 500).</li>
+<li>Only mapped channels in the Start–End range are polled on the DS100 (Companion-style).</li>
+</ul>
+<hr />
+<h2>10. Settings file</h2>
+<p>Settings are saved to <code>settings.json</code> next to the application when you click <strong>Start</strong>.</p>
+<hr />
+<h2>11. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No Digico activity</td>
+<td>Pad IP = Bridge IP; ports swapped correctly; External Control enabled</td>
+</tr>
+<tr>
+<td>Digico RX but no DS100</td>
+<td>DS100 IP; ports 50010/50011 free; network route</td>
+</tr>
+<tr>
+<td>Reverse Digico update missing</td>
+<td>Windows firewall inbound on Digico receive port</td>
+</tr>
+<tr>
+<td>Port already in use</td>
+<td>Stop Companion / Protokol / previous Digico×Soundscape instance</td>
+</tr>
+<tr>
+<td>macOS won’t open binary</td>
+<td>Right-click → Open (unsigned)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>12. License</h2>
+<p>MIT — see <code>LICENSE</code> in the repository.</p>
+<hr />
+<p><em>Digico×Soundscape — manual dated 10 September 2026.</em></p></body></html>

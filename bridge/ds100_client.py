@@ -14,10 +14,13 @@ from bridge.constants import (
     DS100_POLL_INTERVAL_MS,
     DS100_PREFIX,
     DS100_SEND_PORT,
+    ENSPACE_ZONE_COUNT,
 )
 from bridge.mapping import Ds100ParamKind, MappingSpec
 from bridge.settings import clamp_poll_interval_ms
 from bridge.sync_engine import (
+    ds100_enspace_zone_gain_path,
+    ds100_enspace_zone_mute_path,
     ds100_fg_routing_gain_path,
     ds100_fg_routing_mute_path,
     ds100_reverb_send_gain_path,
@@ -153,6 +156,23 @@ class DS100Client:
             ds100_fg_routing_mute_path(function_group, channel),
             1.0 if muted else 0.0,
         )
+        self._on_activity("ds100_tx")
+
+    def send_enspace_zones_gain(self, value: float) -> None:
+        """Set En-Space zone processing gain on zones 1–4."""
+        if not self._client:
+            return
+        for zone in range(1, ENSPACE_ZONE_COUNT + 1):
+            self._client.send_message(ds100_enspace_zone_gain_path(zone), value)
+        self._on_activity("ds100_tx")
+
+    def send_enspace_zones_mute(self, muted: bool) -> None:
+        """Set En-Space zone mute on zones 1–4 (1 = muted)."""
+        if not self._client:
+            return
+        flag = 1.0 if muted else 0.0
+        for zone in range(1, ENSPACE_ZONE_COUNT + 1):
+            self._client.send_message(ds100_enspace_zone_mute_path(zone), flag)
         self._on_activity("ds100_tx")
 
     def _poll_loop(self) -> None:

@@ -71,12 +71,17 @@ pip install -r requirements.txt
 
 | Field | Description |
 |---|---|
-| Start / End Kanal | Input channel range |
+| Start / End Channel | Input channel range (DiGiCo Console panel) |
 | DiGiCo IP / ports | Console IP and Pad Send/Receive ports |
 | DS100 IP | Soundscape processor IP |
 | Mappings | DiGiCo Aux → En-Space Send or Function Group Routing 1–32 |
+| Aux Master → En-Space Zones | Optional: Aux Master fader/mute → En-Space zone 1–4 gain/mute |
 
 DS100 OSC ports are fixed: **50010** (send), **50011** (listen).
+
+## Manual
+
+English user manual: [docs/MANUAL.md](docs/MANUAL.md) (PDF attached to [releases](https://github.com/sergeXYZ/Digico-x-Soundscape/releases)).
 
 ## DiGiCo setup
 

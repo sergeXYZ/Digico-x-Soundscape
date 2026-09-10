@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from bridge.constants import DB_MAX, DB_MIN, DS100_PREFIX, ECHO_THRESHOLD_DB
+from bridge.constants import DB_MAX, DB_MIN, DS100_PREFIX, ECHO_THRESHOLD_DB, ENSPACE_ZONE_COUNT
 from bridge.mapping import Ds100ParamKind, MappingSpec
 
 
@@ -100,6 +100,34 @@ def digico_aux_on_path(channel: int, aux_number: int) -> str:
     return f"/Input_Channels/{channel}/Aux_Send/{aux_number}/send_on"
 
 
+def digico_aux_master_fader_path(aux_number: int) -> str:
+    return f"/Aux_Outputs/{aux_number}/fader"
+
+
+def digico_aux_master_mute_path(aux_number: int) -> str:
+    return f"/Aux_Outputs/{aux_number}/mute"
+
+
+def parse_digico_aux_master_fader(address: str) -> int | None:
+    """Return aux number from Digico Aux Master fader path."""
+    match = re.fullmatch(r"/Aux_Outputs/(\d+)/fader", address, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def parse_digico_aux_master_mute(address: str) -> int | None:
+    """Return aux number from Digico Aux Master mute path."""
+    match = re.fullmatch(r"/Aux_Outputs/(\d+)/mute", address, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def ds100_enspace_zone_gain_path(zone: int, prefix: str = DS100_PREFIX) -> str:
+    return f"{prefix}/reverbinputprocessing/gain/{zone}"
+
+
+def ds100_enspace_zone_mute_path(zone: int, prefix: str = DS100_PREFIX) -> str:
+    return f"{prefix}/reverbinputprocessing/mute/{zone}"
+
+
 def ds100_reverb_send_gain_path(channel: int, prefix: str = DS100_PREFIX) -> str:
     return f"{prefix}/matrixinput/reverbsendgain/{channel}"
 
@@ -141,6 +169,11 @@ class SyncEngine:
         on_to_digico_on: Callable[[int, int, bool], None],  # channel, aux, is_on
         log: Callable[[str], None] | None = None,
         on_mapping_activity: Callable[[str], None] | None = None,
+        *,
+        enspace_master_link_enabled: bool = False,
+        enspace_master_aux: int = 1,
+        on_enspace_zones_gain: Callable[[float], None] | None = None,
+        on_enspace_zones_mute: Callable[[bool], None] | None = None,
     ) -> None:
         if start_channel > end_channel:
             raise ValueError("start_channel must be <= end channel")
@@ -156,10 +189,15 @@ class SyncEngine:
         self._on_to_digico_on = on_to_digico_on
         self._log = log or (lambda _msg: None)
         self._on_mapping_activity = on_mapping_activity or (lambda _mid: None)
+        self.enspace_master_link_enabled = enspace_master_link_enabled
+        self.enspace_master_aux = enspace_master_aux
+        self._on_enspace_zones_gain = on_enspace_zones_gain or (lambda _v: None)
+        self._on_enspace_zones_mute = on_enspace_zones_mute or (lambda _m: None)
         self._lock = threading.Lock()
         # key: (mapping_id, channel)
         self._channels: dict[tuple[str, int], ChannelState] = {}
-
+        self._master_fader: float | None = None
+        self._master_muted: bool | None = None
     def _in_range(self, channel: int) -> bool:
         return self.start_channel <= channel <= self.end_channel
 
@@ -349,3 +387,45 @@ class SyncEngine:
             state.last_source = Source.BRIDGE
             state.last_sent_at = time.monotonic()
         self._on_to_ds100_level(mapping, channel, value)
+
+    def handle_digico_aux_master_fader(self, aux: int, raw_value: float) -> None:
+        """Aux Master fader → all 4 En-Space zone gains (when link enabled)."""
+        if not self.enspace_master_link_enabled:
+            return
+        if aux != self.enspace_master_aux:
+            return
+        value = clamp_db(raw_value)
+        with self._lock:
+            if (
+                self._master_fader is not None
+                and abs(self._master_fader - value) < ECHO_THRESHOLD_DB
+            ):
+                return
+            self._master_fader = value
+        self._log(
+            f"[Aux Master {aux}] → En-Space Zone 1–{ENSPACE_ZONE_COUNT} "
+            f"gain: {value:.2f} dB"
+        )
+        self._on_enspace_zones_gain(value)
+        self._external_master_activity()
+
+    def handle_digico_aux_master_mute(self, aux: int, muted: bool) -> None:
+        """Aux Master mute → all 4 En-Space zone mutes (when link enabled)."""
+        if not self.enspace_master_link_enabled:
+            return
+        if aux != self.enspace_master_aux:
+            return
+        with self._lock:
+            if self._master_muted is not None and self._master_muted == muted:
+                return
+            self._master_muted = muted
+        self._log(
+            f"[Aux Master {aux}] mute={'1' if muted else '0'} "
+            f"→ En-Space Zone 1–{ENSPACE_ZONE_COUNT} mute"
+        )
+        self._on_enspace_zones_mute(muted)
+        self._external_master_activity()
+
+    def _external_master_activity(self) -> None:
+        # Activity key for GUI LED on the master-link control
+        self._on_mapping_activity("enspace_master")
