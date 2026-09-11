@@ -16,8 +16,5 @@ if not exist "%ROOT%.portable_ready" (
 )
 
 set "PYTHONPATH=%ROOT%;%PYTHONPATH%"
-echo Starte DiGiCo DS100 Bridge...
-echo Browser: http://127.0.0.1:8765/
-start http://127.0.0.1:8765/
+echo Starte Digico×Soundscape Launcher...
 "%PY%" -m bridge.main
-pause

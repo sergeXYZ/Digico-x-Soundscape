@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import ipaddress
-import os
 import threading
 import time
 import webbrowser
 from typing import Any
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, send_from_directory
+from werkzeug.serving import BaseWSGIServer, make_server
 
 from bridge.bridge_app import BridgeApp
 from bridge.constants import DS100_LISTEN_PORT, DS100_SEND_PORT
@@ -21,6 +21,7 @@ from bridge.mapping import (
     mapping_from_dict,
 )
 from bridge.net_utils import get_local_ip
+from bridge.resources import assets_dir
 from bridge.settings import BridgeSettings, clamp_poll_interval_ms, load_settings, save_settings
 
 APP_NAME = "Digico×Soundscape"
@@ -31,43 +32,63 @@ HTML = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Digico×Soundscape</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/assets/logo-64.png">
 <style>
 :root {
-  --bg: #12141a;
-  --bg-panel: #1a1d26;
-  --bg-row: #222633;
-  --bg-row-hover: #2a2f3d;
-  --border: #32384a;
-  --text: #e8eaf0;
-  --muted: #9aa3b5;
-  --accent: #3d9cf0;
-  --accent-dim: #2a6fa8;
-  --ok: #3ecf8e;
+  --bg: #050505;
+  --bg-panel: #0c0c0c;
+  --bg-row: #141414;
+  --bg-row-hover: #1c1c1c;
+  --border: #3a453c;
+  --text: #f2f2f2;
+  --muted: #8a9a8c;
+  --accent: #39ff14;
+  --accent-dim: #1a5c14;
+  --accent-glow: #39ff1466;
+  --ok: #39ff14;
   --warn: #e6b84d;
-  --err: #e85d5d;
-  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  --err: #ff4d4d;
+  --font: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", Menlo, ui-monospace, monospace;
+  --status-h: 58px;
 }
 * { box-sizing: border-box; }
 html, body {
   margin: 0; min-height: 100%;
-  background: var(--bg); color: var(--text);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font); font-size: 14px;
 }
 button, input, select { font: inherit; color: inherit; }
 .status-bar {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
-  padding: 10px 16px; background: #0e1015; border-bottom: 1px solid var(--border);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+  min-height: var(--status-h);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 16px;
+  background: #000;
+  border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 700; letter-spacing: 0.02em; font-size: 15px; }
-.brand .x { color: var(--accent); margin: 0 1px; }
+.brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-weight: 700; letter-spacing: 0.04em; font-size: 15px;
+}
+.brand-logo {
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+  object-fit: cover;
+}
+.brand .x {
+  color: var(--accent); margin: 0 2px;
+  text-shadow: 0 0 8px var(--accent-glow);
+}
 .pill {
   background: var(--bg-row); border: 1px solid var(--border);
   border-radius: 4px; padding: 2px 8px; font-size: 12px;
+}
+.pill.running {
+  color: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 .mono { font-family: var(--mono); font-size: 13px; }
 .header-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -75,24 +96,37 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--bg-row); border: 1px solid var(--border);
   border-radius: 4px; padding: 6px 12px; cursor: pointer;
 }
-.btn:hover { background: var(--bg-row-hover); }
+.btn:hover { background: var(--bg-row-hover); border-color: #2a5a2e; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn.primary { background: var(--accent-dim); border-color: var(--accent); }
-.btn.danger { background: #3d1e1e; border-color: var(--err); color: #f0b0b0; }
-.btn.ok { background: #1e3d2a; border-color: var(--ok); color: var(--ok); }
+.btn.primary {
+  background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.btn.danger { background: #2a1010; border-color: var(--err); color: #ffb0b0; }
+.btn.ok {
+  background: #0d2410; border-color: var(--ok); color: var(--ok);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
 .led-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .led {
-  width: 10px; height: 10px; border-radius: 50%; background: #3a4050;
+  width: 10px; height: 10px; border-radius: 50%; background: #222;
   box-shadow: inset 0 0 0 1px #0006; flex-shrink: 0;
 }
-.led.on { background: var(--ok); }
-.led.recent { background: var(--accent); }
+.led.on { background: var(--ok); box-shadow: 0 0 8px var(--accent-glow); }
+.led.recent { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 .conn-dot {
   width: 10px; height: 10px; border-radius: 50%; display: inline-block;
-  background: #3a4050; border: 1px solid #555; margin-right: 6px;
+  background: #222; border: 1px solid #444; margin-right: 6px;
 }
-.conn-dot.ok { background: var(--ok); border-color: #2a9a68; box-shadow: 0 0 6px #3ecf8e88; }
-.layout { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.conn-dot.ok {
+  background: var(--ok); border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.layout {
+  max-width: 1100px; margin: 0 auto;
+  padding: calc(var(--status-h) + 18px) 16px 16px;
+  display: grid; gap: 14px;
+}
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 800px) { .row { grid-template-columns: 1fr; } }
 .panel {
@@ -113,8 +147,31 @@ label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px
 input[type=text], input[type=number], select {
   width: 100%; padding: 8px 10px; margin-bottom: 10px;
   background: var(--bg-row); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text);
 }
-input:disabled, select:disabled { opacity: 0.55; }
+/* Flat select — kill native macOS / WebKit chrome */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 32px;
+  background-color: var(--bg-row);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a0aab0' d='M1.2 1.5L6 6.3l4.8-4.8L12 2.7 6 8.7 0 2.7z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+select::-ms-expand { display: none; }
+select option {
+  background: #141414;
+  color: #f2f2f2;
+}
+input:focus, select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+input:disabled, select:disabled { opacity: 0.55; cursor: not-allowed; }
 /* Hide spinner arrows on all number fields */
 input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button {
@@ -155,35 +212,57 @@ input[type=number] {
 .log-body { margin-top: 12px; }
 .log-body.collapsed { display: none; }
 .log-box {
-  background: #0e1015; border: 1px solid var(--border); border-radius: 4px;
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
   font-family: var(--mono); font-size: 12px; color: var(--muted);
   height: 260px; overflow: auto; padding: 10px; white-space: pre-wrap;
 }
-.sub { color: var(--accent); font-size: 13px; }
-.switch-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.sub { color: var(--accent); font-size: 13px; text-shadow: 0 0 6px var(--accent-glow); }
+.switch-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.master-aux-field { width: auto; margin: 0; }
+.master-aux-field > label { margin-bottom: 4px; }
+.master-aux-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.master-aux-row select {
+  margin-bottom: 0; width: 140px; height: 36px; box-sizing: border-box;
+}
+.master-note {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: 420px;
+  color: var(--warn); font-size: 12px; line-height: 1.3;
+}
+.master-note img {
+  width: auto; height: 36px; flex-shrink: 0;
+  display: block;
+}
 .switch {
   position: relative; width: 42px; height: 24px; flex-shrink: 0;
+  align-self: center; margin-bottom: 6px;
 }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider {
   position: absolute; inset: 0; cursor: pointer;
-  background: #3a4050; border-radius: 24px; border: 1px solid var(--border);
+  background: #222; border-radius: 24px; border: 1px solid var(--border);
   transition: 0.15s;
 }
 .slider:before {
   content: ""; position: absolute; width: 18px; height: 18px;
-  left: 2px; top: 2px; background: #c8cdd8; border-radius: 50%; transition: 0.15s;
+  left: 2px; top: 2px; background: #888; border-radius: 50%; transition: 0.15s;
 }
-.switch input:checked + .slider { background: var(--accent-dim); border-color: var(--accent); }
-.switch input:checked + .slider:before { transform: translateX(18px); background: #fff; }
-.switch-label { font-weight: 500; }
-.master-aux-field { width: 140px; margin: 0; }
-.master-aux-field select { margin-bottom: 0; }
+.switch input:checked + .slider {
+  background: var(--accent-dim); border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.switch input:checked + .slider:before { transform: translateX(18px); background: var(--accent); }
+.switch-label { font-weight: 500; align-self: center; margin-bottom: 6px; }
 </style>
 </head>
 <body>
 <header class="status-bar">
-  <div class="brand">Digico<span class="x">×</span>Soundscape</div>
+  <div class="brand">
+    <img class="brand-logo" src="/assets/logo-64.png" alt="">
+    Digico<span class="x">&lt;x&gt;</span>Soundscape
+  </div>
   <span class="pill" id="statusPill">Stopped</span>
   <span class="mono sub" id="bridgeIp">—</span>
   <div class="header-actions">
@@ -194,7 +273,6 @@ input[type=number] {
     <button type="button" class="btn ok" id="startBtn" onclick="startBridge()">Start</button>
     <button type="button" class="btn danger" id="stopBtn" onclick="stopBridge()" disabled>Stop</button>
     <button type="button" class="btn" id="testBtn" onclick="testConn()" disabled>Test</button>
-    <button type="button" class="btn danger" id="quitBtn" onclick="quitServer()">Quit</button>
   </div>
 </header>
 
@@ -238,8 +316,9 @@ input[type=number] {
 
   <div class="panel">
     <h2><span class="led" id="led_map_enspace_master" style="margin-right:8px"></span> Aux Master → En-Space Zones</h2>
-    <p class="hint">When enabled: DiGiCo Aux Master fader controls En-Space Zone 1–4 gain
-      (<code>/reverbinputprocessing/gain</code>); Aux Master mute controls Zone 1–4 mute.</p>
+    <p class="hint">When enabled: DiGiCo Aux Master fader sets En-Space Zone 1–4 gain
+      (<code>/reverbinputprocessing/gain</code>); Aux Master mute sets Zone 1–4 mute.
+      One-way only — not polled from the DS100.</p>
     <div class="switch-row">
       <label class="switch" title="Enable">
         <input type="checkbox" id="enspace_master_link_enabled">
@@ -248,7 +327,13 @@ input[type=number] {
       <span class="switch-label">Enable</span>
       <div class="master-aux-field">
         <label>Aux Master</label>
-        <select id="enspace_master_aux"></select>
+        <div class="master-aux-row">
+          <select id="enspace_master_aux"></select>
+          <div class="master-note" title="En-Space zone gain/mute have no reverse poll path on the DS100">
+            <img src="/assets/warning-dd.png" alt="Warning">
+            <span>Console → DS100 only. Zone changes on the DS100 are not sent back to the desk.</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -455,9 +540,16 @@ function setRunning(d) {
   document.getElementById('enspace_master_aux').disabled = running || starting;
   document.querySelectorAll('#mappings select, #mappings button').forEach(el => el.disabled = running || starting);
   const pill = document.getElementById('statusPill');
-  if (starting) pill.textContent = 'Starting…';
-  else if (running) pill.textContent = 'Running';
-  else pill.textContent = d.start_error ? 'Error' : 'Stopped';
+  if (starting) {
+    pill.textContent = 'Starting…';
+    pill.classList.remove('running');
+  } else if (running) {
+    pill.textContent = 'Running';
+    pill.classList.add('running');
+  } else {
+    pill.textContent = d.start_error ? 'Error' : 'Stopped';
+    pill.classList.remove('running');
+  }
   if (d.start_error && d.start_error !== lastShownStartError) {
     lastShownStartError = d.start_error;
     alert('Start failed: ' + d.start_error);
@@ -493,13 +585,6 @@ async function stopBridge() {
 async function testConn() {
   await fetch('/api/test', {method:'POST'});
 }
-async function quitServer() {
-  if (!confirm('Quit Digico×Soundscape and shut down the server?')) return;
-  try {
-    await fetch('/api/quit', {method:'POST'});
-  } catch (e) {}
-  document.body.innerHTML = '<div style="padding:40px;font-family:IBM Plex Sans,sans-serif;background:#12141a;color:#e8eaf0;min-height:100vh">Server stopped. You can close this window.</div>';
-}
 
 fetch('/api/settings').then(r=>r.json()).then(setFields).then(poll);
 </script>
@@ -523,14 +608,42 @@ class WebBridgeServer:
         self._starting = False
         self._start_error: str | None = None
         self._started_at: float | None = None
+        self._wsgi: BaseWSGIServer | None = None
+        self._serve_thread: threading.Thread | None = None
 
         self.app.add_url_rule("/", view_func=self._index)
+        self.app.add_url_rule(
+            "/assets/<path:filename>", view_func=self._assets, methods=["GET"]
+        )
         self.app.add_url_rule("/api/settings", view_func=self._api_settings)
         self.app.add_url_rule("/api/state", view_func=self._api_state)
         self.app.add_url_rule("/api/start", view_func=self._api_start, methods=["POST"])
         self.app.add_url_rule("/api/stop", view_func=self._api_stop, methods=["POST"])
         self.app.add_url_rule("/api/test", view_func=self._api_test, methods=["POST"])
-        self.app.add_url_rule("/api/quit", view_func=self._api_quit, methods=["POST"])
+
+    def _assets(self, filename: str) -> Any:
+        allowed = {
+            "logo-64.png",
+            "logo-192.png",
+            "logo.png",
+            "logo.jpg",
+            "warning.png",
+            "warning-18.png",
+            "warning-dd.png",
+        }
+        name = filename.rsplit("/", 1)[-1]
+        if name not in allowed:
+            return ("Not found", 404)
+        return send_from_directory(str(assets_dir()), name)
+
+    @property
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}/"
+
+    def is_serving(self) -> bool:
+        return self._wsgi is not None and (
+            self._serve_thread is not None and self._serve_thread.is_alive()
+        )
 
     def _index(self) -> str:
         import json
@@ -684,27 +797,6 @@ class WebBridgeServer:
             bridge.stop()
         return jsonify(ok=True)
 
-    def _api_quit(self) -> Any:
-        """Stop OSC bridge and terminate the web server process."""
-        with self._lock:
-            bridge = self._bridge
-            self._bridge = None
-            self._running = False
-            self._starting = False
-        if bridge:
-            try:
-                bridge.stop()
-            except Exception:  # noqa: BLE001
-                pass
-        self._log("Quit requested — shutting down.")
-
-        def _exit() -> None:
-            time.sleep(0.35)
-            os._exit(0)
-
-        threading.Thread(target=_exit, name="quit", daemon=True).start()
-        return jsonify(ok=True)
-
     def _log(self, message: str) -> None:
         with self._lock:
             self._log_lines.append(message)
@@ -718,22 +810,62 @@ class WebBridgeServer:
             self._activity_last[key] = now
             self._activity_counts[key] = self._activity_counts.get(key, 0) + 1
 
-    def run(self, open_browser: bool = True) -> None:
-        url = f"http://{self.host}:{self.port}/"
-        self._log(f"Web UI: {url}")
+    def start(self, open_browser: bool = True) -> None:
+        """Bind and serve in a background thread (used by the desktop launcher)."""
+        if self.is_serving():
+            return
+        self._wsgi = make_server(
+            self.host, self.port, self.app, threaded=True
+        )
+        self._log(f"Web UI: {self.url}")
         s = load_settings()
         self._log(
             f"Bridge IP for DiGiCo Pad: {get_local_ip(target_host=s.digico_host)}"
         )
-        if open_browser:
-            threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-        self.app.run(
-            host=self.host,
-            port=self.port,
-            debug=False,
-            use_reloader=False,
-            threaded=True,
+        self._serve_thread = threading.Thread(
+            target=self._wsgi.serve_forever,
+            name="web-ui",
+            daemon=True,
         )
+        self._serve_thread.start()
+        if open_browser:
+            threading.Timer(0.8, lambda: webbrowser.open(self.url)).start()
+
+    def stop(self) -> None:
+        """Stop OSC bridge (if running) and shut down the web server."""
+        with self._lock:
+            bridge = self._bridge
+            self._bridge = None
+            self._running = False
+            self._starting = False
+            self._started_at = None
+        if bridge:
+            try:
+                bridge.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        wsgi = self._wsgi
+        self._wsgi = None
+        if wsgi is not None:
+            try:
+                wsgi.shutdown()
+            except Exception:  # noqa: BLE001
+                pass
+        thread = self._serve_thread
+        self._serve_thread = None
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=3.0)
+
+    def run(self, open_browser: bool = True) -> None:
+        """Blocking serve (CLI / --web-only)."""
+        self.start(open_browser=open_browser)
+        try:
+            while self.is_serving():
+                time.sleep(0.4)
+        except KeyboardInterrupt:
+            self._log("Interrupted — shutting down.")
+        finally:
+            self.stop()
 
 
 def run_web_gui() -> None:

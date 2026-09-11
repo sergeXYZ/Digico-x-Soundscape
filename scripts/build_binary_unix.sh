@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build Digico×Soundscape single-file binary with PyInstaller (macOS / Linux / Raspberry Pi).
+# Build Digico×Soundscape with PyInstaller (macOS / Linux / Raspberry Pi).
 # Run on the target architecture — does not cross-compile.
 set -euo pipefail
 
@@ -28,13 +28,13 @@ source .venv/bin/activate
 echo "PyInstaller: ${APP_SLUG} ..."
 "$ROOT/.venv/bin/python" -m PyInstaller digibridge.spec --noconfirm --clean
 
-if [ -f settings.json ]; then
-  cp -f settings.json dist/settings.json
-else
-  cat > dist/settings.json <<'EOF'
+# Default settings next to the built app / binary
+write_settings() {
+  local dest="$1"
+  cat > "$dest" <<'EOF'
 {
   "start_channel": 1,
-  "end_channel": 64,
+  "end_channel": 1,
   "digico_host": "192.168.1.10",
   "digico_send_port": 9000,
   "digico_listen_port": 8000,
@@ -42,8 +42,28 @@ else
   "ds100_poll_interval_ms": 500
 }
 EOF
-fi
+}
 
-echo
-echo "Fertig: $ROOT/dist/${APP_SLUG}"
-echo "Optional: settings.json liegt in dist/"
+if [ -d "dist/${APP_SLUG}.app" ]; then
+  # macOS .app — settings live next to the bundle
+  if [ -f settings.json ]; then
+    cp -f settings.json "dist/settings.json"
+  else
+    write_settings "dist/settings.json"
+  fi
+  echo
+  echo "Fertig: $ROOT/dist/${APP_SLUG}.app"
+  echo "settings.json liegt in dist/ (neben der .app ablegen)"
+elif [ -f "dist/${APP_SLUG}" ]; then
+  if [ -f settings.json ]; then
+    cp -f settings.json dist/settings.json
+  else
+    write_settings dist/settings.json
+  fi
+  echo
+  echo "Fertig: $ROOT/dist/${APP_SLUG}"
+  echo "Optional: settings.json liegt in dist/"
+else
+  echo "FEHLER: Build-Artefakt nicht gefunden in dist/" >&2
+  exit 1
+fi

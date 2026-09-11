@@ -6,9 +6,10 @@ DiGiCo Quantum ↔ d&b DS100 OSC Bridge
 Schnellstart
 ------------
 1. Zip entpacken
-2. Digico-x-Soundscape doppelklicken (oder: ./Digico-x-Soundscape)
-3. Browser öffnet http://127.0.0.1:8765/
+2. Digico-x-Soundscape.app doppelklicken
+3. App-Fenster öffnet die Web-UI (schwarz/grün)
 4. IPs / Ports / Mappings setzen → Start
+5. Zum Beenden: App-Fenster schließen
 
 Falls macOS "unbekanntes Entwickler"-Warnung zeigt:
   Rechtsklick → Öffnen (einmalig), oder:
@@ -16,9 +17,12 @@ Falls macOS "unbekanntes Entwickler"-Warnung zeigt:
 
 Dateien
 -------
-Digico-x-Soundscape   Startprogramm (Web-UI)
-settings.json         Einstellungen
-README.txt            Diese Datei
+Digico-x-Soundscape.app   Desktop-App (WebKit-UI + gebündelter Server)
+settings.json             Einstellungen (neben der .app ablegen)
+README.txt                Diese Datei
+
+Hinweis: Alle Laufzeit-Komponenten sind in der .app enthalten —
+kein separates Python nötig.
 
 Netzwerk
 --------

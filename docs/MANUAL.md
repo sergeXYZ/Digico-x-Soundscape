@@ -125,7 +125,7 @@ Example (common defaults):
 4. Add **Mappings** (Aux → DS100 parameter).
 5. Optionally enable **Aux Master → En-Space Zones**.
 6. Click **Start**.
-7. Use **Test** to probe connections; **Stop** to stop the OSC bridge; **Quit** to exit the server.
+7. Use **Test** to probe connections; **Stop** to stop the OSC bridge. Close the desktop launcher (or click **Stop Server**) to shut down the web server.
 
 Status LEDs:
 
@@ -170,14 +170,15 @@ Enable switch in the UI. When enabled for a chosen Aux Master:
 | `/Aux_Outputs/{AUX}/fader` | `/dbaudio1/reverbinputprocessing/gain/1` … `/4` |
 | `/Aux_Outputs/{AUX}/mute` | `/dbaudio1/reverbinputprocessing/mute/1` … `/4` |
 
-Use this to ride overall En-Space zone level and mute from the Digico Aux master.
+**One-way only (console → DS100).** En-Space zone gain/mute are not polled back from the DS100 — there is no reverse path for this link.
 
 ---
 
 ## 9. Polling
 
 - **Polling Interval (ms):** 100–60000 (default 500).
-- Only mapped channels in the Start–End range are polled on the DS100 (Companion-style).
+- Only mapped channels in the Start–End range are polled on the DS100 (Companion-style: En-Space Send / FG routing).
+- Aux Master → En-Space Zones is **not** included in polling.
 
 ---
 

@@ -30,7 +30,7 @@ Download platform packages from the [GitHub Releases](https://github.com/sergeXY
 
 | Zip | Platform | Start |
 |---|---|---|
-| `Digico-x-Soundscape-macos-arm64.zip` | macOS Apple Silicon | `./Digico-x-Soundscape` |
+| `Digico-x-Soundscape-macos-arm64.zip` | macOS Apple Silicon | Double-click `Digico-x-Soundscape.app` |
 | `Digico-x-Soundscape-windows-portable.zip` | Windows (no system Python) | `start_bridge.bat` |
 | `Digico-x-Soundscape-linux.zip` | Linux x86_64 | `./install.sh` then `./Digico-x-Soundscape.sh` |
 | `Digico-x-Soundscape-raspberrypi.zip` | Raspberry Pi (64-bit) | `./install.sh` then `./Digico-x-Soundscape.sh` |
@@ -44,7 +44,8 @@ Build all zips locally:
 **Notes**
 
 - Windows EXE and Linux/Pi single-file binaries must be built **on that machine** (`build_exe.bat` / `./build_binary.sh`).
-- macOS Gatekeeper may warn (unsigned binary): right-click → Open.
+- macOS Gatekeeper may warn (unsigned app): right-click → Open.
+- Launcher starts/stops the web server; configure the OSC bridge in the browser UI.
 - Web UI: http://127.0.0.1:8765/
 
 ## Requirements (dev / source)
@@ -63,9 +64,11 @@ pip install -r requirements.txt
 
 ## Run (from source)
 
-**macOS:** Double-click `run_bridge.command` — opens http://127.0.0.1:8765/
+**macOS:** Double-click `run_bridge.command` — opens the desktop launcher.
 
 **Windows:** Double-click `start_bridge.bat`
+
+Optional: `python -m bridge.main --web-only` runs only the Flask UI (no launcher window).
 
 ## GUI fields
 

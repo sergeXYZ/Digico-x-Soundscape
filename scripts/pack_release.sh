@@ -30,7 +30,7 @@ default_settings() {
   cat > "$dest" <<'EOF'
 {
   "start_channel": 1,
-  "end_channel": 64,
+  "end_channel": 1,
   "digico_host": "192.168.1.10",
   "digico_send_port": 9000,
   "digico_listen_port": 8000,
@@ -48,6 +48,11 @@ copy_bridge_tree() {
     --exclude '*.pyc' \
     --exclude '.DS_Store' \
     "$ROOT/bridge/" "$dest/bridge/"
+  mkdir -p "$dest/assets"
+  rsync -a --delete \
+    --exclude '.DS_Store' \
+    --exclude 'logo.iconset' \
+    "$ROOT/assets/" "$dest/assets/"
   cp "$ROOT/requirements.txt" "$dest/"
   cp "$ROOT/run_bridge.py" "$dest/"
   default_settings "$dest/settings.json"
@@ -66,9 +71,9 @@ zip_dir() {
 }
 
 # ---------------------------------------------------------------------------
-# macOS (PyInstaller on this machine)
+# macOS (PyInstaller .app on this machine)
 # ---------------------------------------------------------------------------
-echo "==> macOS binary ($ARCH)"
+echo "==> macOS app ($ARCH)"
 chmod +x "$ROOT/scripts/build_binary_unix.sh"
 "$ROOT/scripts/build_binary_unix.sh"
 
@@ -76,8 +81,11 @@ MAC_NAME="${APP_SLUG}-macos-${ARCH}"
 MAC_DIR="$STAGE/$MAC_NAME"
 rm -rf "$MAC_DIR"
 mkdir -p "$MAC_DIR"
-cp "$ROOT/dist/${APP_SLUG}" "$MAC_DIR/${APP_SLUG}"
-chmod +x "$MAC_DIR/${APP_SLUG}"
+if [ -d "$ROOT/dist/${APP_SLUG}.app" ]; then
+  ditto "$ROOT/dist/${APP_SLUG}.app" "$MAC_DIR/${APP_SLUG}.app"
+else
+  die "dist/${APP_SLUG}.app fehlt — Build fehlgeschlagen?"
+fi
 default_settings "$MAC_DIR/settings.json"
 cp "$ROOT/packaging/macos/README.txt" "$MAC_DIR/README.txt"
 zip_dir "$MAC_DIR" "${MAC_NAME}-${VERSION}.zip"

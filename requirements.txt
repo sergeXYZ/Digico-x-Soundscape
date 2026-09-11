@@ -1,2 +1,4 @@
 python-osc>=1.8.3
 flask>=3.0.0
+# Optional native WebKit shell (macOS .app). Windows/Linux/Pi fall back to system browser.
+# Install separately for local macOS/Windows GUI shell builds: pip install 'pywebview>=5.0'

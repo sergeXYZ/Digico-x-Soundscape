@@ -13,5 +13,5 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-echo "Digico×Soundscape — Web-UI: http://127.0.0.1:8765/"
+echo "Digico×Soundscape — Launcher startet…"
 exec ./.venv/bin/python -m bridge.main

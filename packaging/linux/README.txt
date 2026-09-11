@@ -3,6 +3,8 @@ Digico×Soundscape — Linux (x86_64 / amd64)
 
 Voraussetzung: Python 3.9+ (python3 python3-venv python3-pip)
 
+Status: In this release Linux packages are UNTESTED on real hardware.
+
 Schnellstart
 ------------
 1. Zip entpacken
@@ -12,5 +14,6 @@ Schnellstart
 5. Browser: http://127.0.0.1:8765/
 
 Optional Binary: ./build_binary.sh → dist/Digico-x-Soundscape
+  (auf dem Zielrechner bauen)
 
 DiGiCo Pad → Bridge IP dieses Rechners. DS100 Ports: 50010 / 50011.

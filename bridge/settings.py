@@ -23,8 +23,16 @@ from bridge.mapping import (
 
 
 def _app_dir() -> Path:
+    """Directory for settings.json (next to binary / next to .app / project root)."""
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        exe = Path(sys.executable).resolve()
+        if sys.platform == "darwin":
+            # Digico-x-Soundscape.app/Contents/MacOS/Digico-x-Soundscape
+            # → store settings next to the .app bundle
+            for parent in exe.parents:
+                if parent.suffix == ".app":
+                    return parent.parent
+        return exe.parent
     return Path(__file__).resolve().parent.parent
 
 
@@ -38,7 +46,7 @@ def clamp_poll_interval_ms(value: int) -> int:
 @dataclass
 class BridgeSettings:
     start_channel: int = 1
-    end_channel: int = 64
+    end_channel: int = 1
     digico_host: str = "192.168.1.10"
     digico_send_port: int = 9000
     digico_listen_port: int = 8000
@@ -68,7 +76,7 @@ def load_settings() -> BridgeSettings:
 
         return BridgeSettings(
             start_channel=int(data.get("start_channel", 1)),
-            end_channel=int(data.get("end_channel", 64)),
+            end_channel=int(data.get("end_channel", 1)),
             digico_host=str(data.get("digico_host", "192.168.1.10")),
             digico_send_port=int(data.get("digico_send_port", 9000)),
             digico_listen_port=int(data.get("digico_listen_port", 8000)),
